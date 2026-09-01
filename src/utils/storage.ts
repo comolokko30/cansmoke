@@ -6,9 +6,25 @@ const ENCRYPTION_SALT = 'BreatheAndSave2026';
 
 export function getDefaultAppState(): AppState {
   const todayKey = getTodayKey();
+  const startDate = '2026-09-01'; // 1 Eylül 2026, Salı
 
-  const todayRecord: DayRecord = {
+  const defaultRecord: DayRecord = {
     dateKey: todayKey,
+    smokedCount: 0,
+    limit: 7,
+    penaltyPerExcess: 50,
+    penaltyAmount: 0,
+    isSuccessful: true,
+    logs: [],
+  };
+
+  const records: Record<string, DayRecord> = {
+    [todayKey]: defaultRecord,
+  };
+
+  // 1 Eylül 2026 Salı başlangıç günü ve başarılı (tikli)
+  records['2026-09-01'] = {
+    dateKey: '2026-09-01',
     smokedCount: 0,
     limit: 7,
     penaltyPerExcess: 50,
@@ -20,19 +36,22 @@ export function getDefaultAppState(): AppState {
   return {
     settings: {
       userName: 'Murat',
+      partnerName: 'Sevgilim',
       dailyLimit: 7,
       penaltyPerExcess: 50,
       weekStartDay: 1, // Pazartesi
-      vaultTargetName: 'Hafta Sonu Tatili & Dinlenme 🏖️',
+      vaultTargetName: 'Birlikte Hafta Sonu Tatili 🏖️',
       vaultTargetAmount: 2500,
+      startDate: startDate,
+      roomId: 'couple-main',
       isEncrypted: false,
       encryptionKeyHint: '',
     },
-    records: {
-      [todayKey]: todayRecord,
-    },
+    records,
     vaultBalance: 0,
     vaultTransactions: [],
+    activeActor: 'Sevgilim',
+    lastSyncedAt: Date.now(),
   };
 }
 
@@ -70,7 +89,6 @@ function decryptPayload(data: string, key = ENCRYPTION_SALT): string {
 
 export function loadAppState(): AppState {
   try {
-    // Clear legacy v1 mock data if present
     if (localStorage.getItem('breathe_and_save_v1')) {
       localStorage.removeItem('breathe_and_save_v1');
     }
@@ -92,13 +110,31 @@ export function loadAppState(): AppState {
 
     if (!parsed.settings) {
       parsed.settings = getDefaultAppState().settings;
+    } else {
+      if (!parsed.settings.partnerName) parsed.settings.partnerName = 'Sevgilim';
+      parsed.settings.startDate = '2026-09-01';
+      if (!parsed.settings.roomId) parsed.settings.roomId = 'couple-main';
     }
 
     const todayKey = getTodayKey();
-    if (!parsed.records || !parsed.records[todayKey]) {
-      if (!parsed.records) parsed.records = {};
+    if (!parsed.records) parsed.records = {};
+
+    if (!parsed.records[todayKey]) {
       parsed.records[todayKey] = {
         dateKey: todayKey,
+        smokedCount: 0,
+        limit: parsed.settings.dailyLimit || 7,
+        penaltyPerExcess: parsed.settings.penaltyPerExcess || 50,
+        penaltyAmount: 0,
+        isSuccessful: true,
+        logs: [],
+      };
+    }
+
+    // Ensure 1 Eylül 2026 is always initialized and successful (tikli)
+    if (!parsed.records['2026-09-01']) {
+      parsed.records['2026-09-01'] = {
+        dateKey: '2026-09-01',
         smokedCount: 0,
         limit: parsed.settings.dailyLimit || 7,
         penaltyPerExcess: parsed.settings.penaltyPerExcess || 50,

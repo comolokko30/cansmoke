@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "SharedApp": {
+      "collection": "shared_apps",
+      "description": "Shared couple cigarette tracking and vault state synchronized in real-time.",
+      "fields": {
+        "settings": {
+          "type": "map",
+          "description": "App settings including daily limit, user names, startDate, penalty amount."
+        },
+        "records": {
+          "type": "map",
+          "description": "Daily cigarette records map keyed by YYYY-MM-DD date."
+        },
+        "vaultBalance": {
+          "type": "number",
+          "description": "Total vault balance in TL."
+        },
+        "vaultTransactions": {
+          "type": "array",
+          "description": "List of vault transactions."
+        },
+        "lastUpdated": {
+          "type": "number",
+          "description": "Timestamp of the last sync."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Name of the person who made the last change."
+        }
+      }
+    }
+  }
+}

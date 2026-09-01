@@ -6,7 +6,7 @@ import {
   Upload,
   RotateCcw,
   Check,
-  Lock,
+  Calendar,
 } from 'lucide-react';
 import { AppSettings, AppState } from '../types';
 import { exportBackup } from '../utils/storage';
@@ -26,19 +26,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
 
-  // Form states for general settings
+  // Form states
   const [dailyLimit, setDailyLimit] = useState(state.settings.dailyLimit || 7);
   const [penaltyPerExcess, setPenaltyPerExcess] = useState(state.settings.penaltyPerExcess || 50);
-  const [userName, setUserName] = useState(state.settings.userName || 'Murat');
-  const [isEncrypted, setIsEncrypted] = useState(state.settings.isEncrypted);
+  const [startDate, setStartDate] = useState(state.settings.startDate || '2026-09-01');
   const [saveToast, setSaveToast] = useState(false);
 
   const handleSaveGeneral = () => {
     onUpdateSettings({
       dailyLimit: Number(dailyLimit) || 7,
       penaltyPerExcess: Number(penaltyPerExcess) || 50,
-      userName: userName.trim() || 'Murat',
-      isEncrypted,
+      startDate: startDate || '2026-09-01',
     });
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 2500);
@@ -83,7 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Sliders className="w-3.5 h-3.5" />
-          <span>Genel & Limit</span>
+          <span>Limit & Tarih Ayarları</span>
         </button>
 
         <button
@@ -95,7 +93,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Güvenlik & Yedek</span>
+          <span>Yedekleme & Sıfırlama</span>
         </button>
       </div>
 
@@ -112,7 +110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center gap-2 pb-3 border-b border-[#DDEEE0]">
             <Sliders className="w-5 h-5 text-[#76987E]" />
             <h3 className="text-sm font-bold text-[#1E3A2B]">
-              Günlük Limit & Ceza Ayarları
+              Sigara ve Ceza Ayarları
             </h3>
           </div>
 
@@ -130,7 +128,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-3.5 py-2.5 text-sm rounded-2xl border border-[#DDEEE0] focus:outline-none focus:ring-2 focus:ring-[#76987E] bg-[#EBF7EE] text-[#1E3A2B]"
               />
               <p className="text-[11px] text-[#7A9682] mt-1 font-medium">
-                Günde içilebilecek azami hedef sigara sayısı (varsayılan: 7)
+                Günde içilebilecek hedef sigara sayısı (varsayılan: 7)
               </p>
             </div>
 
@@ -147,23 +145,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-3.5 py-2.5 text-sm rounded-2xl border border-[#DDEEE0] focus:outline-none focus:ring-2 focus:ring-[#76987E] bg-[#EBF7EE] text-[#1E3A2B]"
               />
               <p className="text-[11px] text-[#7A9682] mt-1 font-medium">
-                Aşılan her 1 sigara için ortak kasaya eklenecek tutar (Örn: 50 TL)
+                Limiti aşan her 1 sigara için kasaya eklenecek ceza
               </p>
             </div>
           </div>
 
-          {/* User Name */}
+          {/* Başlangıç Tarihi */}
           <div className="pt-3 border-t border-[#DDEEE0]">
-            <label className="block text-xs font-bold text-[#1E3A2B] mb-1.5">
-              Kullanıcı Adı
-            </label>
+            <div className="flex items-center gap-2 mb-1.5">
+              <Calendar className="w-4 h-4 text-[#76987E]" />
+              <label className="block text-xs font-bold text-[#1E3A2B]">
+                Takip Başlangıç Tarihi
+              </label>
+            </div>
             <input
-              type="text"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
               className="w-full px-3.5 py-2.5 text-sm rounded-2xl border border-[#DDEEE0] focus:outline-none focus:ring-2 focus:ring-[#76987E] bg-[#EBF7EE] text-[#1E3A2B]"
-              placeholder="Örn: Murat"
             />
+            <p className="text-[11px] text-[#7A9682] mt-1 font-medium">
+              Başlangıç 1 Eylül 2026 Salı günüdür ve başarılı (tikli) sayılmaktadır.
+            </p>
           </div>
 
           <button
@@ -181,36 +184,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center gap-2 pb-3 border-b border-[#DDEEE0]">
             <ShieldCheck className="w-5 h-5 text-[#76987E]" />
             <h3 className="text-sm font-bold text-[#1E3A2B]">
-              Veri Güvenliği & Şifreleme
+              Yedekleme & Sıfırlama
             </h3>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#EBF7EE]/60 border border-[#DDEEE0] space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-[#76987E]" />
-                <span className="text-xs font-bold text-[#1E3A2B]">
-                  Yerel Veri Şifreleme
-                </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isEncrypted}
-                  onChange={(e) => setIsEncrypted(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-[#D7EADB] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#76987E]"></div>
-              </label>
-            </div>
-            <p className="text-[11px] text-[#7A9682] font-medium">
-              Tüm sigara kayıtları ve kasa bakiyesi tarayıcınızda güvenle saklanır.
-            </p>
-          </div>
-
-          {/* Backup / Export / Import */}
-          <div className="space-y-2.5 pt-2">
-            <h4 className="text-xs font-bold text-[#1E3A2B]">Yedekleme & Geri Yükleme</h4>
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-bold text-[#1E3A2B]">Yedek Dosyası</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 onClick={handleExport}
@@ -237,14 +216,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="pt-4 border-t border-[#DDEEE0]">
             <button
               onClick={() => {
-                if (confirm('Tüm kayıtları ve kasa bakiyesini sıfırlamak istediğinize emin misiniz?')) {
+                if (confirm('Tüm kayıtları sıfırlamak istediğinize emin misiniz? (1 Eylül 2026 Salı başlangıçlı temiz duruma dönecektir)')) {
                   onResetData();
                 }
               }}
               className="text-xs text-[#E5484D] hover:underline font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Tüm Verileri Sıfırla (Temiz Başlangıç)</span>
+              <span>Verileri Sıfırla (1 Eylül Salı Temiz Başlangıç)</span>
             </button>
           </div>
         </div>

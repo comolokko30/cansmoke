@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppState, CigaretteLogItem, DayRecord, VaultTransaction } from './types';
 import {
   getDefaultAppState,
@@ -7,6 +7,7 @@ import {
   importBackup,
 } from './utils/storage';
 import { getTodayKey, formatTime } from './utils/dateUtils';
+import { subscribeToSharedState, pushStateToCloud } from './utils/firebase';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { HomeView } from './components/HomeView';
@@ -25,9 +26,45 @@ export default function App() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<'manual_deposit' | 'manual_spend'>('manual_deposit');
 
-  // Sync state to localStorage whenever it changes
+  const isRemoteSyncRef = useRef(false);
+
+  // 1. Subscribe to Firebase real-time shared updates (Firestore)
+  useEffect(() => {
+    const roomId = state.settings.roomId || 'couple-main';
+
+    const unsubscribe = subscribeToSharedState(
+      roomId,
+      (remoteState) => {
+        if (remoteState && remoteState.records) {
+          isRemoteSyncRef.current = true;
+          setState((prev) => ({
+            ...prev,
+            ...remoteState,
+            settings: {
+              ...prev.settings,
+              ...remoteState.settings,
+            },
+          }));
+          saveAppState(remoteState);
+          setTimeout(() => {
+            isRemoteSyncRef.current = false;
+          }, 200);
+        }
+      },
+      (err) => {
+        console.warn('Firebase sync note:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [state.settings.roomId]);
+
+  // 2. Save state to localStorage and push to Cloud
   useEffect(() => {
     saveAppState(state);
+    if (!isRemoteSyncRef.current) {
+      pushStateToCloud(state, state.settings.partnerName || 'Sevgilim', state.settings.roomId || 'couple-main');
+    }
   }, [state]);
 
   const todayKey = getTodayKey();
@@ -61,6 +98,7 @@ export default function App() {
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: now.getTime(),
         timeStr,
+        loggedBy: state.settings.partnerName || 'Sevgilim',
       },
     ];
 
@@ -80,7 +118,7 @@ export default function App() {
         timestamp: Date.now(),
         amount: penaltyPerExcess,
         type: 'penalty',
-        description: `Limit aşımı (${newSmokedCount}. sigara - ${timeStr})`,
+        description: `Limit aşımı (${newSmokedCount}. sigara)`,
       });
     }
 
@@ -94,15 +132,19 @@ export default function App() {
       logs: newLogs,
     };
 
-    setState((prev) => ({
-      ...prev,
+    const newState: AppState = {
+      ...state,
       records: {
-        ...prev.records,
+        ...state.records,
         [todayKey]: updatedTodayRecord,
       },
       vaultBalance: updatedVaultBalance,
       vaultTransactions: updatedTransactions,
-    }));
+      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
+
+    setState(newState);
   };
 
   // Handler: Undo Last Cigarette
@@ -142,15 +184,19 @@ export default function App() {
       logs: newLogs,
     };
 
-    setState((prev) => ({
-      ...prev,
+    const newState: AppState = {
+      ...state,
       records: {
-        ...prev.records,
+        ...state.records,
         [todayKey]: updatedTodayRecord,
       },
       vaultBalance: updatedVaultBalance,
       vaultTransactions: updatedTransactions,
-    }));
+      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
+
+    setState(newState);
   };
 
   // Handler: Update Today's logs from modal
@@ -171,34 +217,44 @@ export default function App() {
       logs: newLogs,
     };
 
-    setState((prev) => ({
-      ...prev,
+    const newState: AppState = {
+      ...state,
       records: {
-        ...prev.records,
+        ...state.records,
         [todayKey]: updatedTodayRecord,
       },
-    }));
+      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
+
+    setState(newState);
   };
 
   // Handler: Add transaction
   const handleAddVaultTransaction = (tx: VaultTransaction) => {
-    setState((prev) => ({
-      ...prev,
-      vaultBalance: Math.max(0, prev.vaultBalance + tx.amount),
-      vaultTransactions: [tx, ...prev.vaultTransactions],
-    }));
+    const newState: AppState = {
+      ...state,
+      vaultBalance: Math.max(0, state.vaultBalance + tx.amount),
+      vaultTransactions: [tx, ...state.vaultTransactions],
+      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
+    setState(newState);
   };
 
   // Handler: Update vault target
   const handleUpdateVaultTarget = (targetName: string, targetAmount: number) => {
-    setState((prev) => ({
-      ...prev,
+    const newState: AppState = {
+      ...state,
       settings: {
-        ...prev.settings,
+        ...state.settings,
         vaultTargetName: targetName,
         vaultTargetAmount: targetAmount,
       },
-    }));
+      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
+    setState(newState);
   };
 
   // Handler: Update settings
@@ -210,6 +266,8 @@ export default function App() {
           ...prev.settings,
           ...newSettings,
         },
+        lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+        lastSyncedAt: Date.now(),
       };
 
       if (newSettings.dailyLimit !== undefined || newSettings.penaltyPerExcess !== undefined) {
@@ -239,20 +297,22 @@ export default function App() {
     const fresh = getDefaultAppState();
     setState(fresh);
     saveAppState(fresh);
+    pushStateToCloud(fresh, fresh.settings.partnerName || 'Sevgilim', fresh.settings.roomId);
   };
 
   // Handler: Import Backup
   const handleImportBackup = (jsonStr: string) => {
     const imported = importBackup(jsonStr);
     setState(imported);
+    pushStateToCloud(imported, imported.settings.partnerName || 'Sevgilim', imported.settings.roomId || 'couple-main');
   };
 
   return (
     <div className="min-h-screen bg-[#EBF7EE] text-[#1E3A2B] flex flex-col font-sans selection:bg-[#D7EADB] selection:text-[#1E3A2B]">
-      {/* Top Header */}
+      {/* Top Header with live sync */}
       <Header
-        userName={state.settings.userName}
         onOpenProfile={() => setCurrentTab('settings')}
+        isCloudSynced={true}
       />
 
       {/* Main Content Area */}

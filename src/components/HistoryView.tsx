@@ -72,7 +72,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ state }) => {
       const d = parseDateKey(rec.dateKey);
       return {
         date: d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-        kasa: runningVault + 750,
+        kasa: runningVault,
         ceza: rec.penaltyAmount,
       };
     });
@@ -109,6 +109,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ state }) => {
 
   return (
     <div className="space-y-5 pb-24 pt-1">
+      {/* Start Date Banner */}
+      <div className="bg-white p-3 rounded-2xl border border-[#DDEEE0] flex items-center justify-between shadow-2xs">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-[#76987E]" />
+          <span className="text-xs font-bold text-[#1E3A2B]">
+            Takip Başlangıcı: {formatTurkishDate(state.settings.startDate || '2026-09-01', false)}
+          </span>
+        </div>
+        <span className="px-2.5 py-0.5 rounded-full bg-[#D7EADB] text-[#556E5C] text-[10px] font-bold">
+          1 Eylül Başarılı ✓
+        </span>
+      </div>
+
       {/* 1. Overall Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-4 rounded-2xl bg-white border border-[#DDEEE0] shadow-2xs text-center">
