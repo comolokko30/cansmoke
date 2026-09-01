@@ -1,14 +1,14 @@
 import React from 'react';
-import { User } from 'lucide-react';
+import { User, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface HeaderProps {
   onOpenProfile: () => void;
-  isCloudSynced?: boolean;
+  syncStatus?: 'connected' | 'syncing' | 'error';
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
-  isCloudSynced = true,
+  syncStatus = 'connected',
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-[#EBF7EE]/90 backdrop-blur-md transition-all border-b border-[#DDEEE0]/50">
@@ -20,11 +20,27 @@ export const Header: React.FC<HeaderProps> = ({
               Breathe & Save
             </h1>
             <div className="flex items-center gap-1.5 text-[10px] text-[#688A72] font-medium">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#76987E] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#556E5C]"></span>
-              </span>
-              <span>Anlık Canlı Senkronizasyon</span>
+              {syncStatus === 'connected' && (
+                <>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#76987E] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#556E5C]"></span>
+                  </span>
+                  <span>Canlı Senkronize</span>
+                </>
+              )}
+              {syncStatus === 'syncing' && (
+                <>
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#76987E]" />
+                  <span>Güncelleniyor...</span>
+                </>
+              )}
+              {syncStatus === 'error' && (
+                <>
+                  <AlertCircle className="w-2.5 h-2.5 text-amber-600" />
+                  <span className="text-amber-700">Yeniden bağlanıyor...</span>
+                </>
+              )}
             </div>
           </div>
         </div>

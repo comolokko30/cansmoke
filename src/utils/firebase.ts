@@ -6,6 +6,7 @@ import {
   setDoc,
   getDoc,
   Unsubscribe,
+  getDocFromServer,
 } from 'firebase/firestore';
 import { AppState } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -23,6 +24,17 @@ export const db = getFirestore(
 
 const DEFAULT_ROOM_ID = 'couple-main';
 
+export async function testFirestoreConnection(): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'shared_apps', DEFAULT_ROOM_ID);
+    await getDocFromServer(docRef);
+    return true;
+  } catch (error) {
+    console.warn('Firestore connection test info:', error);
+    return false;
+  }
+}
+
 export function subscribeToSharedState(
   roomId: string = DEFAULT_ROOM_ID,
   onRemoteUpdate: (remoteState: AppState) => void,
@@ -38,10 +50,12 @@ export function subscribeToSharedState(
         if (data && data.state) {
           onRemoteUpdate(data.state as AppState);
         }
+      } else {
+        // Document doesn't exist yet on cloud, so it will be created on first user edit
       }
     },
     (error) => {
-      console.warn('Firestore subscription error:', error);
+      console.error('Firestore subscription error:', error);
       if (onError) onError(error);
     }
   );
@@ -51,9 +65,9 @@ export function subscribeToSharedState(
 
 export async function pushStateToCloud(
   state: AppState,
-  updatedBy: string = 'Murat',
+  updatedBy: string = 'Sevgilim',
   roomId: string = DEFAULT_ROOM_ID
-): Promise<void> {
+): Promise<boolean> {
   try {
     const docRef = doc(db, 'shared_apps', roomId);
     await setDoc(
@@ -65,8 +79,10 @@ export async function pushStateToCloud(
       },
       { merge: true }
     );
+    return true;
   } catch (error) {
-    console.warn('Failed to sync state to Firebase:', error);
+    console.error('Failed to sync state to Firebase:', error);
+    return false;
   }
 }
 

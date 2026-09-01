@@ -7,7 +7,7 @@ import {
   importBackup,
 } from './utils/storage';
 import { getTodayKey, formatTime } from './utils/dateUtils';
-import { subscribeToSharedState, pushStateToCloud } from './utils/firebase';
+import { subscribeToSharedState, pushStateToCloud, fetchRemoteState } from './utils/firebase';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { HomeView } from './components/HomeView';
@@ -20,6 +20,7 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 export default function App() {
   const [state, setState] = useState<AppState>(() => loadAppState());
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
   // Modals state
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -27,45 +28,72 @@ export default function App() {
   const [transactionType, setTransactionType] = useState<'manual_deposit' | 'manual_spend'>('manual_deposit');
 
   const isRemoteSyncRef = useRef(false);
+  const hasInitializedFromCloudRef = useRef(false);
 
-  // 1. Subscribe to Firebase real-time shared updates (Firestore)
+  // Helper to commit state locally & immediately sync to cloud
+  const mutateAndSyncState = (nextState: AppState) => {
+    setState(nextState);
+    saveAppState(nextState);
+    setSyncStatus('syncing');
+    pushStateToCloud(nextState, 'Sevgilim', nextState.settings.roomId || 'couple-main')
+      .then((success) => {
+        setSyncStatus(success ? 'connected' : 'error');
+      })
+      .catch(() => {
+        setSyncStatus('error');
+      });
+  };
+
+  // 1. Initial Remote State Fetch & Real-Time Subscription
   useEffect(() => {
-    const roomId = state.settings.roomId || 'couple-main';
+    const roomId = 'couple-main';
 
+    // First do a direct fetch to populate immediately if available
+    fetchRemoteState(roomId).then((remote) => {
+      if (remote && remote.records) {
+        hasInitializedFromCloudRef.current = true;
+        isRemoteSyncRef.current = true;
+        setState(remote);
+        saveAppState(remote);
+        setSyncStatus('connected');
+        setTimeout(() => {
+          isRemoteSyncRef.current = false;
+        }, 300);
+      } else {
+        // If remote state doesn't exist on cloud yet, push our clean initial state
+        hasInitializedFromCloudRef.current = true;
+        const initial = loadAppState();
+        pushStateToCloud(initial, 'Sevgilim', roomId);
+        setSyncStatus('connected');
+      }
+    }).catch((e) => {
+      console.warn('Initial fetch error:', e);
+      setSyncStatus('error');
+    });
+
+    // Subscribe to real-time changes
     const unsubscribe = subscribeToSharedState(
       roomId,
       (remoteState) => {
         if (remoteState && remoteState.records) {
+          hasInitializedFromCloudRef.current = true;
           isRemoteSyncRef.current = true;
-          setState((prev) => ({
-            ...prev,
-            ...remoteState,
-            settings: {
-              ...prev.settings,
-              ...remoteState.settings,
-            },
-          }));
+          setState(remoteState);
           saveAppState(remoteState);
+          setSyncStatus('connected');
           setTimeout(() => {
             isRemoteSyncRef.current = false;
-          }, 200);
+          }, 300);
         }
       },
       (err) => {
-        console.warn('Firebase sync note:', err);
+        console.warn('Firebase sync listener warning:', err);
+        setSyncStatus('error');
       }
     );
 
     return () => unsubscribe();
-  }, [state.settings.roomId]);
-
-  // 2. Save state to localStorage and push to Cloud
-  useEffect(() => {
-    saveAppState(state);
-    if (!isRemoteSyncRef.current) {
-      pushStateToCloud(state, state.settings.partnerName || 'Sevgilim', state.settings.roomId || 'couple-main');
-    }
-  }, [state]);
+  }, []);
 
   const todayKey = getTodayKey();
 
@@ -98,7 +126,7 @@ export default function App() {
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: now.getTime(),
         timeStr,
-        loggedBy: state.settings.partnerName || 'Sevgilim',
+        loggedBy: 'Sevgilim',
       },
     ];
 
@@ -140,11 +168,11 @@ export default function App() {
       },
       vaultBalance: updatedVaultBalance,
       vaultTransactions: updatedTransactions,
-      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastUpdatedBy: 'Sevgilim',
       lastSyncedAt: Date.now(),
     };
 
-    setState(newState);
+    mutateAndSyncState(newState);
   };
 
   // Handler: Undo Last Cigarette
@@ -192,11 +220,11 @@ export default function App() {
       },
       vaultBalance: updatedVaultBalance,
       vaultTransactions: updatedTransactions,
-      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastUpdatedBy: 'Sevgilim',
       lastSyncedAt: Date.now(),
     };
 
-    setState(newState);
+    mutateAndSyncState(newState);
   };
 
   // Handler: Update Today's logs from modal
@@ -223,11 +251,11 @@ export default function App() {
         ...state.records,
         [todayKey]: updatedTodayRecord,
       },
-      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastUpdatedBy: 'Sevgilim',
       lastSyncedAt: Date.now(),
     };
 
-    setState(newState);
+    mutateAndSyncState(newState);
   };
 
   // Handler: Add transaction
@@ -236,10 +264,10 @@ export default function App() {
       ...state,
       vaultBalance: Math.max(0, state.vaultBalance + tx.amount),
       vaultTransactions: [tx, ...state.vaultTransactions],
-      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastUpdatedBy: 'Sevgilim',
       lastSyncedAt: Date.now(),
     };
-    setState(newState);
+    mutateAndSyncState(newState);
   };
 
   // Handler: Update vault target
@@ -251,68 +279,63 @@ export default function App() {
         vaultTargetName: targetName,
         vaultTargetAmount: targetAmount,
       },
-      lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
+      lastUpdatedBy: 'Sevgilim',
       lastSyncedAt: Date.now(),
     };
-    setState(newState);
+    mutateAndSyncState(newState);
   };
 
   // Handler: Update settings
   const handleUpdateSettings = (newSettings: Partial<AppState['settings']>) => {
-    setState((prev) => {
-      const updated = {
-        ...prev,
-        settings: {
-          ...prev.settings,
-          ...newSettings,
-        },
-        lastUpdatedBy: state.settings.partnerName || 'Sevgilim',
-        lastSyncedAt: Date.now(),
-      };
+    const updated: AppState = {
+      ...state,
+      settings: {
+        ...state.settings,
+        ...newSettings,
+      },
+      lastUpdatedBy: 'Sevgilim',
+      lastSyncedAt: Date.now(),
+    };
 
-      if (newSettings.dailyLimit !== undefined || newSettings.penaltyPerExcess !== undefined) {
-        const todayRec = updated.records[todayKey];
-        if (todayRec) {
-          const newLimit = newSettings.dailyLimit ?? todayRec.limit;
-          const newPenaltyPerExcess = newSettings.penaltyPerExcess ?? todayRec.penaltyPerExcess;
-          const isExceeded = todayRec.smokedCount > newLimit;
-          const penaltyAmount = isExceeded ? (todayRec.smokedCount - newLimit) * newPenaltyPerExcess : 0;
+    if (newSettings.dailyLimit !== undefined || newSettings.penaltyPerExcess !== undefined) {
+      const todayRec = updated.records[todayKey];
+      if (todayRec) {
+        const newLimit = newSettings.dailyLimit ?? todayRec.limit;
+        const newPenaltyPerExcess = newSettings.penaltyPerExcess ?? todayRec.penaltyPerExcess;
+        const isExceeded = todayRec.smokedCount > newLimit;
+        const penaltyAmount = isExceeded ? (todayRec.smokedCount - newLimit) * newPenaltyPerExcess : 0;
 
-          updated.records[todayKey] = {
-            ...todayRec,
-            limit: newLimit,
-            penaltyPerExcess: newPenaltyPerExcess,
-            penaltyAmount,
-            isSuccessful: !isExceeded,
-          };
-        }
+        updated.records[todayKey] = {
+          ...todayRec,
+          limit: newLimit,
+          penaltyPerExcess: newPenaltyPerExcess,
+          penaltyAmount,
+          isSuccessful: !isExceeded,
+        };
       }
+    }
 
-      return updated;
-    });
+    mutateAndSyncState(updated);
   };
 
   // Handler: Reset Data
   const handleResetData = () => {
     const fresh = getDefaultAppState();
-    setState(fresh);
-    saveAppState(fresh);
-    pushStateToCloud(fresh, fresh.settings.partnerName || 'Sevgilim', fresh.settings.roomId);
+    mutateAndSyncState(fresh);
   };
 
   // Handler: Import Backup
   const handleImportBackup = (jsonStr: string) => {
     const imported = importBackup(jsonStr);
-    setState(imported);
-    pushStateToCloud(imported, imported.settings.partnerName || 'Sevgilim', imported.settings.roomId || 'couple-main');
+    mutateAndSyncState(imported);
   };
 
   return (
     <div className="min-h-screen bg-[#EBF7EE] text-[#1E3A2B] flex flex-col font-sans selection:bg-[#D7EADB] selection:text-[#1E3A2B]">
-      {/* Top Header with live sync */}
+      {/* Top Header with live sync indicator */}
       <Header
         onOpenProfile={() => setCurrentTab('settings')}
-        isCloudSynced={true}
+        syncStatus={syncStatus}
       />
 
       {/* Main Content Area */}
