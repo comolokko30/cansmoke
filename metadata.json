@@ -1,0 +1,6 @@
+{
+  "name": "Breathe & Save - Sigara Azaltma & Kasa Takibi",
+  "description": "Günlük 7 sigara hedefini takip et, limit aşımlarında ortak kasada birikim yap ve tasarruf et.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
